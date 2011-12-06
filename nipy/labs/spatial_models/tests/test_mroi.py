@@ -47,9 +47,9 @@ def test_subdomain2():
     """
     mroi = make_subdomain()
     assert_equal(len(mroi.get_size()), 8)
-    for k in mroi.get_id():
+    for k in mroi.get_ids():
         assert_equal(mroi.get_size(k),
-                     np.sum(mroi.label == mroi.select_id(k)))
+                     np.sum(mroi.label[mroi.select_id(k)]))
 
 
 def test_copy_subdomain():
@@ -63,14 +63,14 @@ def test_copy_subdomain():
     mroi_copy = mroi.copy()
     # check some properties of mroi
     assert_equal(mroi.k, 8)
-    for k in mroi.get_id():
+    for k in mroi.get_ids():
         assert_equal(mroi.get_feature('a', k), foo_feature[mroi.select_id(k)])
     assert_equal(mroi.get_roi_feature('b'), foo_roi_feature)
     # delete mroi
     del mroi
     # check mroi_copy
     assert_equal(mroi_copy.k, 8)
-    for k in mroi_copy.get_id():
+    for k in mroi_copy.get_ids():
         assert_equal(mroi_copy.get_feature('a', k),
                      foo_feature[mroi_copy.select_id(k)])
     assert_equal(mroi_copy.get_roi_feature('b'), foo_roi_feature)
@@ -81,7 +81,7 @@ def test_select_roi():
     """
     mroi = make_subdomain()
     aux = np.random.randn(np.prod(shape))
-    data = [aux[mroi.label == k] for k in range(8)]
+    data = [aux[mroi.label[k] > 0.] for k in range(8)]
     mroi.set_feature('data', data)
     mroi.set_roi_feature('data_mean', range(8))
     mroi.select_roi([0])
@@ -94,7 +94,7 @@ def test_subdomain_feature():
     """
     mroi = make_subdomain()
     aux = np.random.randn(np.prod(shape))
-    data = [aux[mroi.label == k] for k in range(8)]
+    data = [aux[mroi.label[k] > 0.] for k in range(8)]
     mroi.set_feature('data', data)
     assert_equal(mroi.features['data'][0], data[0])
 
@@ -104,7 +104,7 @@ def test_sd_integrate():
     """
     mroi = make_subdomain()
     aux = np.random.randn(np.prod(shape))
-    data = [aux[mroi.label == k] for k in range(8)]
+    data = [aux[mroi.label[k] > 0.] for k in range(8)]
     mroi.set_feature('data', data)
     sums = mroi.integrate('data')
     for k in range(8):
@@ -115,7 +115,7 @@ def test_sd_integrate2():
     """Test the integration
     """
     mroi = make_subdomain()
-    for k in mroi.get_id():
+    for k in mroi.get_ids():
         assert_equal(mroi.get_volume(k), mroi.integrate(id=k))
     volume_from_integration = mroi.integrate()
     volume_from_feature = mroi.get_volume()
@@ -127,10 +127,10 @@ def test_sd_representative():
     """Test the computation of representative features
     """
     mroi = make_subdomain()
-    data = [[k] * mroi.get_size(k) for k in mroi.get_id()]
+    data = [[k] * mroi.get_size(k) for k in mroi.get_ids()]
     mroi.set_feature('data', data)
     sums = mroi.representative_feature('data')
-    for k in mroi.get_id():
+    for k in mroi.get_ids():
         assert_equal(sums[mroi.select_id(k)], k)
 
 
@@ -149,12 +149,12 @@ def test_set_feature():
     mroi = make_subdomain()
     data = np.random.randn(np.prod(shape))
     feature_data = [data[mroi.select_id(k, roi=False)]
-                    for k in mroi.get_id()]
+                    for k in mroi.get_ids()]
     mroi.set_feature('data', feature_data)
     get_feature_output = mroi.get_feature('data')
     assert_equal([len(k) for k in mroi.get_feature('data')],
                  mroi.get_size())
-    for k in mroi.get_id():
+    for k in mroi.get_ids():
         assert_equal(mroi.get_feature('data', k),
                      data[mroi.select_id(k, roi=False)])
         assert_equal(get_feature_output[k],
@@ -167,7 +167,7 @@ def test_set_feature2():
     mroi = make_subdomain()
     data = np.random.randn(np.prod(shape))
     feature_data = [data[mroi.select_id(k, roi=False)]
-                    for k in mroi.get_id()]
+                    for k in mroi.get_ids()]
     mroi.set_feature('data', feature_data)
     mroi.set_feature('data', np.asarray([1000]), id=0, override=True)
     assert_equal(mroi.get_feature('data', 0), [1000])
@@ -177,7 +177,7 @@ def test_get_coord():
     """
     """
     mroi = make_subdomain()
-    for k in mroi.get_id():
+    for k in mroi.get_ids():
         assert_equal(mroi.get_coord(k),
                      mroi.domain.coord[mroi.select_id(k, roi=False)])
 

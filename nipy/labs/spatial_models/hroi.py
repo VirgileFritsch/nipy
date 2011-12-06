@@ -53,7 +53,7 @@ def hroi_agglomeration(input_hroi, criterion='size', smin=0):
         if criterion == 'volume':
             value = output_hroi.get_volume()
         # regions agglomeration
-        output_hroi.merge_ascending(output_hroi.get_id()[value > smin])
+        output_hroi.merge_ascending(output_hroi.get_ids()[value < smin])
         # suppress parents nodes having only one child
         output_hroi.merge_descending()
         # early stopping 1
@@ -68,7 +68,7 @@ def hroi_agglomeration(input_hroi, criterion='size', smin=0):
             break
 
     # finally remove those regions for which the criterion cannot be matched
-    output_hroi.select_roi(output_hroi.get_id()[value > smin])
+    output_hroi.select_roi(output_hroi.get_ids()[value > smin])
     return output_hroi
 
 
@@ -107,7 +107,7 @@ def HROI_as_discrete_domain_blobs(domain, data, threshold=NINF, smin=0,
     nroi = HierarchicalROI(domain, label, parents)
     # create a signal feature
     data = np.ravel(data)
-    signal = [data[nroi.select_id(id, roi=False)] for id in nroi.get_id()]
+    signal = [data[nroi.select_id(id, roi=False)] for id in nroi.get_ids()]
     nroi.set_feature('signal', signal)
     # agglomerate regions in order to compact the structure if necessary
     nroi = hroi_agglomeration(nroi, criterion=criterion, smin=smin)
@@ -219,17 +219,17 @@ class HierarchicalROI(SubDomains):
                 # get children volume
                 for k in desc:
                     volume = volume + SubDomains.get_volume(
-                        self, self.get_id()[k])
+                        self, self.get_ids()[k])
             else:
                 volume = []
-                for id in self.get_id():
+                for id in self.get_ids():
                     roi_volume = SubDomains.get_volume(self, id)
                     desc = self.make_forest().get_descendents(
                         self.select_id(id), exclude_self=True)
                     # get children volume
                     for k in desc:
                         roi_volume = roi_volume + SubDomains.get_volume(
-                            self, self.get_id()[k])
+                            self, self.get_ids()[k])
                     volume.append(roi_volume)
         return volume
 
@@ -265,17 +265,17 @@ class HierarchicalROI(SubDomains):
                     self.select_id(id), exclude_self=True)
                 # get children size
                 for k in desc:
-                    size = size + SubDomains.get_size(self, self.get_id()[k])
+                    size = size + SubDomains.get_size(self, self.get_ids()[k])
             else:
                 size = []
-                for id in self.get_id():
+                for id in self.get_ids():
                     roi_size = SubDomains.get_size(self, id)
                     desc = self.make_forest().get_descendents(
                         self.select_id(id), exclude_self=True)
                     # get children size
                     for k in desc:
                         roi_size = roi_size + SubDomains.get_size(
-                            self, self.get_id()[k])
+                            self, self.get_ids()[k])
                     size.append(roi_size)
         return size
 
@@ -290,19 +290,19 @@ class HierarchicalROI(SubDomains):
           The id of the ROI to be kept in the structure.
 
         """
-        valid = np.asarray([int(i in id_list) for i in self.get_id()])
+        valid = np.asarray([int(i in id_list) for i in self.get_ids()])
         if np.size(id_list) == 0:
             # handle the case of an empty selection
             new_parents = np.array([])
             self = HierarchicalROI(
-                self.domain, -np.ones(self.label.size), np.array([]))
+                self.domain, -np.ones(self.label.shape[1]), np.array([]))
         else:
             # get new parents
             new_parents = Forest(self.k, self.parents).subforest(
                 valid.astype(np.bool)).parents.astype(np.int)
-        SubDomains.select_roi(self, id_list)
+            SubDomains.select_roi(self, id_list)
         self.parents = new_parents
-        self.recompute_labels()
+        self.update_roi_number()
 
     def make_graph(self):
         """Output an nipy graph structure to represent the ROI hierarchy.
@@ -344,7 +344,7 @@ class HierarchicalROI(SubDomains):
             return
         # reorder to avoid introducing discrepancies
         self.make_forest().reorder_from_leaves_to_roots()
-        id_list = [k for k in self.get_id() if k in id_list]
+        id_list = [k for k in self.get_ids() if k in id_list]
         # keep trace of the ROI to be merged since ids can change during merge
         map_id = {}
         for i in id_list:
@@ -355,19 +355,19 @@ class HierarchicalROI(SubDomains):
             c_id = map_id[c_old_id]
             c_pos = self.select_id(c_id)
             p_pos = self.parents[c_pos]
-            p_id = self.get_id()[p_pos]
+            p_id = self.get_ids()[p_pos]
             if p_pos != c_pos:
                 # compute new features
                 for fid in self.features.keys():
                     # preserve voxels order in the feature
-                    c_mask = np.zeros(self.label.size, dtype=bool)
+                    c_mask = np.zeros(self.label.shape[1], dtype=bool)
                     c_mask[self.select_id(c_id, roi=False)] = True
-                    p_mask = np.zeros(self.label.size, dtype=bool)
+                    p_mask = np.zeros(self.label.shape[1], dtype=bool)
                     p_mask[self.select_id(p_id, roi=False)] = True
                     # build new feature
                     c_feature = self.get_feature(fid, c_id)
                     p_feature = self.get_feature(fid, p_id)
-                    new_feature = np.zeros(self.label.size)
+                    new_feature = np.zeros(self.label.shape[1])
                     new_feature[c_mask] = c_feature
                     new_feature[p_mask] = p_feature
                     new_feature = new_feature[c_mask + p_mask]
@@ -393,7 +393,8 @@ class HierarchicalROI(SubDomains):
                 self.parents[self.parents > former_pos] = \
                     self.parents[self.parents > former_pos] - 1
                 # merge labels
-                self.label[self.select_id(c_id, roi=False)] = p_pos
+                self.label[p_pos, self.select_id(c_id, roi=False)] = 1.
+                self.label[c_pos] = 0.
                 # set ids
                 dj = self.get_roi_feature('id')
                 if 'id' in pull_features:
@@ -403,19 +404,17 @@ class HierarchicalROI(SubDomains):
                 dj = dj[np.arange(self.k) != c_pos]
                 self.roi_features['id'] = dj
                 # update HROI structure
-                self.recompute_labels()
+                self.update_roi_number()
 
     def merge_descending(self, pull_features=None):
         """ Remove the items with only one son by including them in their son
 
         Parameters
         ----------
-        methods indicates the way possible features are dealt with
-        (not implemented yet)
+        pull_features:
+          indicates the way possible features are dealt with
+          (not implemented yet)
 
-        Caveat
-        ------
-        if roi_features have been defined, they will be removed
         """
         if pull_features is None:
             pull_features = []
@@ -426,10 +425,10 @@ class HierarchicalROI(SubDomains):
         self.make_forest().reorder_from_leaves_to_roots()
         # keep trace of the ROI to be merged since ids can change during merge
         map_id = {}
-        for i in self.get_id():
+        for i in self.get_ids():
             map_id.update({i: i})
         # merge nodes, one at a time
-        id_list = self.get_id()[:: - 1]
+        id_list = self.get_ids()[:: - 1]
         for p_old_id in id_list:
             p_id = map_id[p_old_id]
             p_pos = self.select_id(p_id)
@@ -440,19 +439,19 @@ class HierarchicalROI(SubDomains):
             if p_children.size == 1:
                 # merge node if it has only one child
                 c_pos = p_children[0]
-                c_id = self.get_id()[c_pos]
+                c_id = self.get_ids()[c_pos]
                 valid.append(p_old_id)
                 # compute new features
                 for fid in self.features.keys():
                     # preserve voxels order in the feature
-                    c_mask = np.zeros(self.label.size, dtype=bool)
+                    c_mask = np.zeros(self.label.shape[1], dtype=bool)
                     c_mask[self.select_id(c_id, roi=False)] = True
-                    p_mask = np.zeros(self.label.size, dtype=bool)
+                    p_mask = np.zeros(self.label.shape[1], dtype=bool)
                     p_mask[self.select_id(p_id, roi=False)] = True
                     # build new feature
                     c_feature = self.get_feature(fid, c_id)
                     p_feature = self.get_feature(fid, p_id)
-                    new_feature = np.zeros(self.label.size)
+                    new_feature = np.zeros(self.label.shape[1])
                     new_feature[c_mask] = c_feature
                     new_feature[p_mask] = p_feature
                     new_feature = new_feature[c_mask + p_mask]
@@ -476,11 +475,13 @@ class HierarchicalROI(SubDomains):
                 if self.parents[c_pos] == p_pos:
                     self.parents[c_pos] = c_pos
                 former_pos = np.where(np.arange(self.k) == p_pos)[0]
+                #import pdb; pdb.set_trace()
                 self.parents = self.parents[np.arange(self.k) != p_pos]
                 self.parents[self.parents > former_pos] = \
                     self.parents[self.parents > former_pos] - 1
                 # merge labels
-                self.label[self.label == p_pos] = c_pos
+                self.label[c_pos, self.select_id(p_id, roi=False)] = 1.
+                self.label[p_pos] = 0.
                 # set ids
                 dj = self.get_roi_feature('id')
                 if 'id' in pull_features:
@@ -490,7 +491,7 @@ class HierarchicalROI(SubDomains):
                 dj = dj[np.arange(self.k) != p_pos]
                 self.roi_features['id'] = dj
                 # update HROI structure
-                self.recompute_labels()
+                self.update_roi_number()
 
     def get_parents(self):
         """Return the parent of each node in the hierarchy
@@ -518,7 +519,7 @@ class HierarchicalROI(SubDomains):
             [(len(child) == 0) or (len(child) == 1 and child[0] == i)
              for i, child in enumerate(is_leaf_aux)])
         # finaly return ids
-        return self.get_id()[is_leaf]
+        return self.get_ids()[is_leaf]
 
     def reduce_to_leaves(self):
         """Create a  new set of rois which are only the leaves of self.
@@ -541,7 +542,7 @@ class HierarchicalROI(SubDomains):
 
         """
         cp = HierarchicalROI(
-            self.domain, self.label.copy(), self.parents.copy(), self.get_id())
+            self.domain, self.label.copy(), self.parents.copy(), self.get_ids())
         # copy features
         for fid in self.features.keys():
             cp.set_feature(fid, self.get_feature(fid))
@@ -579,7 +580,7 @@ class HierarchicalROI(SubDomains):
         rf = []
         eps = 1.e-15
         feature_quality = np.zeros(self.k)
-        for i, k in enumerate(self.get_id()):
+        for i, k in enumerate(self.get_ids()):
             f = self.get_feature(fid, k)
             p_pos = self.select_id(k)
             if not ignore_children:
@@ -589,7 +590,7 @@ class HierarchicalROI(SubDomains):
                     desc = desc[desc != p_pos]
                 for c in desc:
                     f = np.concatenate(
-                        (f, self.get_feature(fid, self.get_id()[c])))
+                        (f, self.get_feature(fid, self.get_ids()[c])))
             # NaN-resistant representative
             if f.ndim == 2:
                 nan = np.isnan(f.sum(1))

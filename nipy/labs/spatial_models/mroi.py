@@ -2,6 +2,7 @@
 # vi: set ft=python sts=4 ts=4 sw=4 et:
 
 import numpy as np
+import scipy.sparse as sps
 
 from nibabel import load, Nifti1Image
 
@@ -29,9 +30,8 @@ class SubDomains(object):
       Number of ROI in the SubDomains object
     `label`: array of shape (domain.size), dtype=np.int,
       An array use to define which voxel belongs to which ROI.
-      The label values greater than -1 correspond to subregions
-      labelling. The labels are recomputed so as to be consecutive
-      integers.
+      If label.shape == (domain.size, ), the label values greater
+      than -1 correspond to subregions labelling.
       The labels should not be accessed outside this class. One has to
       use the API mapping methods instead.
     `features`: dict{str: list of object, length=self.k}
@@ -52,10 +52,10 @@ class SubDomains(object):
         domain: ROI instance
           defines the spatial context of the SubDomains
         label: array of shape (domain.size), dtype=np.int,
+               or array of shape (n_roi, domain.size), dtype=np.int
           An array use to define which voxel belongs to which ROI.
-          The label values greater than -1 correspond to subregions
-          labelling. The labels are recomputed so as to be consecutive
-          integers.
+          If label.shape == (domain.size, ), the label values greater
+          than -1 correspond to subregions labelling.
           The labels should not be accessed outside this class. One has to
           use the select_id() mapping method instead.
         id: array of shape (n_roi)
@@ -64,13 +64,35 @@ class SubDomains(object):
           should access ROI through their id to avoid hazardous manipulations.
 
         """
-        # check that label size is consistent with domain
-        if np.size(label) != domain.size:
-            raise ValueError('inconsistent labels and domains specification')
+        label = np.asarray(label)
+        if label.size == 0:
+            self.label = np.asarray([])
+        elif label.ndim == 2 and label.shape[1] == domain.size:
+            if label.shape[1] != domain.size:
+                raise ValueError("inconsistent dimensions of labels")
+            label[label > 0] = 1.
+            label[label != 1] = 0.
+            self.label = label
+        else:
+            # check that label shape is consistent with domain
+            if np.size(label) != domain.size:
+                raise ValueError("inconsistent size of labels")
+            label = np.reshape(label, label.size).astype(np.int)
+            # redefine labels so that they are consecutive integers
+            lmap = np.unique(label[label > - 1])
+            for i, k in enumerate(lmap):
+                label[label == k] = i
+            # convert labels to a matrix
+            if np.max(label) > -1:
+                label = sps.coo_matrix(
+                    (np.ones(np.sum(label > -1)),
+                     ((label[label > -1], np.where(label > -1)[0]))),
+                    shape=(np.max(label) + 1, label.size))
+                self.label = np.asarray(label.todense())
+            else:
+                self.label = np.asarray([])
         self.domain = domain
-        self.label = np.reshape(label, label.size).astype(np.int)
-        # use continuous labels
-        self.recompute_labels()
+        self.update_roi_number()
 
         # initialize empty feature/roi_feature dictionaries
         self.features = {}
@@ -83,14 +105,13 @@ class SubDomains(object):
             # use user-provided ids
             if len(id) != self.k:
                 raise ValueError("incorrect shape for `id`")
-            else:
-                self.set_roi_feature('id', id)
+            self.set_roi_feature('id', id)
 
     ###
     # Methods for internal use: id and labels manipulations
     ###
-    def recompute_labels(self):
-        """Redefine labels so that they are consecutive integers.
+    def update_roi_number(self):
+        """Update number of regions according to labels
 
         Labels are used as a map to associate voxels to a given ROI.
         It is an inner object that should not be accessed outside this class.
@@ -101,13 +122,14 @@ class SubDomains(object):
         This method must be called everytime the MROI structure is modified.
 
         """
-        lmap = np.unique(self.label[self.label > - 1])
-        for i, k in enumerate(lmap):
-            self.label[self.label == k] = i
-        # number of ROIs: number of labels > -1
-        self.k = np.amax(self.label) + 1
+        if self.label.size > 0:
+            self.label = self.label[self.label.sum(1) > 0.]
+            # update number of ROIs
+            self.k = self.label.shape[0]
+        else:
+            self.k = 0
 
-    def get_id(self):
+    def get_ids(self):
         """Return ROI's id list.
 
         Users must access ROIs with the use of the identifiers of this list
@@ -121,7 +143,7 @@ class SubDomains(object):
 
         Parameter
         ---------
-        id: any hashable type, must be in self.get_id()
+        id: any hashable type, must be in self.get_ids()
           The id of the region one wants to access.
         roi: boolean
           If True (default), return the ROI index in the ROI list.
@@ -136,12 +158,12 @@ class SubDomains(object):
           with respect to the self.label array.
 
         """
-        if id not in self.get_id():
+        if id not in self.get_ids():
             raise ValueError("Unexisting `id` provided")
         if roi:
-            index = int(np.where(self.get_id() == id)[0])
+            index = int(np.where(self.get_ids() == id)[0])
         else:
-            index = np.where(self.label == np.where(self.get_id() == id)[0])[0]
+            index = np.where(self.label[self.select_id(id)] > 0)[0]
         return index
 
     ###
@@ -153,7 +175,7 @@ class SubDomains(object):
         Note that self.domain is not copied.
 
         """
-        cp = SubDomains(self.domain, self.label.copy(), id=self.get_id())
+        cp = SubDomains(self.domain, self.label.copy(), id=self.get_ids())
         for fid in self.features.keys():
             f = self.get_feature(fid)
             sf = [np.array(f[k]).copy() for k in range(self.k)]
@@ -186,7 +208,7 @@ class SubDomains(object):
             coords = self.domain.coord[self.select_id(id, roi=False)]
         else:
             coords = [self.domain.coord[self.select_id(k, roi=False)]
-                      for k in self.get_id()]
+                      for k in self.get_ids()]
         return coords
 
     def get_size(self, id=None):
@@ -210,7 +232,8 @@ class SubDomains(object):
             size = np.size(self.select_id(id, roi=False))
         else:
             size = np.array(
-                [np.size(self.select_id(k, roi=False)) for k in self.get_id()])
+                [np.size(self.select_id(k, roi=False))
+                 for k in self.get_ids()])
         return size
 
     def get_local_volume(self, id=None):
@@ -235,7 +258,7 @@ class SubDomains(object):
                 self.select_id(id, roi=False)]
         else:
             loc_volume = [self.domain.local_volume[
-                    self.select_id(k, roi=False)] for k in self.get_id()]
+                    self.select_id(k, roi=False)] for k in self.get_ids()]
         return loc_volume
 
     def get_volume(self, id=None):
@@ -339,7 +362,7 @@ class SubDomains(object):
             # check data size
             if len(data) != self.k:
                 raise ValueError("data should have length %i" % self.k)
-            for k in self.get_id():
+            for k in self.get_ids():
                 if len(data[self.select_id(k)]) != self.get_size(k):
                     raise ValueError('Wrong data size for region `%i`' % k)
             self.features.update({fid: data})
@@ -374,7 +397,7 @@ class SubDomains(object):
         rf = []
         eps = 1.e-15
         feature_quality = np.zeros(self.k)
-        for i, k in enumerate(self.get_id()):
+        for i, k in enumerate(self.get_ids()):
             f = self.get_feature(fid, k)
             # NaN-resistant representative
             if f.ndim == 2:
@@ -441,19 +464,19 @@ class SubDomains(object):
           and the feature.
 
         """
-        res = np.zeros(self.label.size)
+        res = np.zeros(self.label.shape[1])
         if not roi:
             f = self.get_feature(fid)
-            for id in self.get_id():
+            for id in self.get_ids():
                 res[self.select_id(id, roi=False)] = f[self.select_id(id)]
         else:
             if fid in self.roi_features.keys():
                 f = self.get_roi_feature(fid)
-                for id in self.get_id():
+                for id in self.get_ids():
                     res[self.select_id(id, roi=False)] = f[self.select_id(id)]
             elif fid in self.features.keys():
                 f = self.representative_feature(fid, method=method)
-                for id in self.get_id():
+                for id in self.get_ids():
                     res[self.select_id(id, roi=False)] = f[self.select_id(id)]
             else:
                 raise ValueError("Wrong feature id provided")
@@ -482,7 +505,7 @@ class SubDomains(object):
             if id is not None:
                 lsum = self.get_volume(id)
             else:
-                lsum = [self.get_volume(k) for k in self.get_id()]
+                lsum = [self.get_volume(k) for k in self.get_ids()]
         else:
             if id is not None:
                 slvk = np.expand_dims(self.get_local_volume(id), 1)
@@ -491,7 +514,7 @@ class SubDomains(object):
                 lsum = np.sum(sfk * slvk, 0)
             else:
                 lsum = []
-                for k in self.get_id():
+                for k in self.get_ids():
                     slvk = np.expand_dims(self.get_local_volume(k), 1)
                     sfk = self.get_feature(fid, k)
                     sfk = np.reshape(sfk, (-1, 1))
@@ -594,7 +617,7 @@ class SubDomains(object):
         if fid != 'id':
             feature = self.roi_features.pop(fid)
         else:
-            feature = self.get_id()
+            feature = self.get_ids()
         return feature
         #TODO: raise a warning otherwise
 
@@ -633,25 +656,26 @@ class SubDomains(object):
 
         if fid is None:
             # write a binary representation of the domain if no fid provided
-            nim = self.domain.to_image(data=(self.label != -1).astype(int))
+            nim = self.domain.to_image(
+                data=(self.label.sum(0) > 0).astype(int))
             if descrip is None:
                 descrip = 'binary representation of MROI'
         else:
-            data = -np.ones(self.label.size)
+            data = -np.ones(self.label.shape[1])
             tmp_image = self.domain.to_image()
             mask = tmp_image.get_data().copy().astype(bool)
             if not roi:
                 # write a feature
                 if fid not in self.features:
                     raise ValueError("`%s` feature could not be found" % fid)
-                for i in self.get_id():
+                for i in self.get_ids():
                     data[self.select_id(i, roi=False)] = \
                         self.get_feature(fid, i)
             else:
                 # write a roi feature
                 if fid in self.roi_features:
                     # write from existing roi feature
-                    for i in self.get_id():
+                    for i in self.get_ids():
                         data[self.select_id(i, roi=False)] = \
                             self.get_roi_feature(
                             fid, i)
@@ -659,7 +683,7 @@ class SubDomains(object):
                     # write from representative feature
                     summary_feature = self.representative_feature(
                         fid, method=method)
-                    for i in self.get_id():
+                    for i in self.get_ids():
                         data[self.select_id(i, roi=False)] = \
                             summary_feature[self.select_id(i)]
             # MROI object was defined on a masked image: we square it back.
@@ -685,15 +709,15 @@ class SubDomains(object):
         """
         # handle the case of an empty selection
         if len(id_list) == 0:
-            self = SubDomains(self.domain, -np.ones(self.label.size))
+            self = SubDomains(self.domain, -np.ones(self.label.shape[1]))
             return
         # convert id to indices
         id_list_pos = np.ravel([self.select_id(k) for k in id_list])
         # set new labels (= map between voxels and ROI)
-        for id in self.get_id():
+        for id in self.get_ids():
             if id not in id_list:
-                self.label[self.select_id(id, roi=False)] = -1
-        self.recompute_labels()
+                self.label[self.select_id(id)] = 0.
+        self.update_roi_number()
         self.roi_features['id'] = np.ravel([id_list])
 
         # set new features

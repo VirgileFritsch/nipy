@@ -7,7 +7,7 @@ Caveat assumes that the MNI template image is available at
 in ~/.nipy/tests/data
 
 In those tests, we often access some ROI directly by a fixed index
-instead of using the utility functions such as get_id() or select_id().
+instead of using the utility functions such as get_ids() or select_id().
 
 """
 
@@ -75,7 +75,6 @@ def test_hroi_isleaf_2():
     """Test tree pruning, with parent remapping
     """
     hroi = make_hroi()
-    #import pdb; pdb.set_trace()
     hroi.select_roi(range(1, 9))
     assert_equal(hroi.parents, np.arange(8).astype(np.int))
 
@@ -85,8 +84,7 @@ def test_asc_merge():
     """
     hroi = make_hroi()
     s1 = hroi.get_size(0) + hroi.get_size(1)
-    total_size = np.sum([hroi.get_size(id) for id in hroi.get_id()])
-    #import pdb; pdb.set_trace()
+    total_size = np.sum([hroi.get_size(id) for id in hroi.get_ids()])
     assert_equal(hroi.get_size(0, ignore_children=False), total_size)
     hroi.merge_ascending([1])
     assert_equal(hroi.get_size(0), s1)
@@ -126,7 +124,7 @@ def test_asc_merge_4():
     parents = np.arange(9) - 1
     parents[0] = 0
     hroi.parents = parents
-    labels3 = [hroi.label[hroi.label == k] for k in range(hroi.k)]
+    labels3 = [hroi.label[k, hroi.label[k] > 0.] for k in range(hroi.k)]
     hroi.set_feature('labels3', labels3)
     hroi.merge_ascending([1], pull_features=['labels2'])
     assert_equal(hroi.k, 8)
@@ -156,7 +154,7 @@ def test_desc_merge_2():
     parents[0] = 0
     hroi.parents = parents
     hroi.set_roi_feature('labels', np.arange(hroi.k))
-    labels2 = [hroi.label[hroi.label == k] for k in range(hroi.k)]
+    labels2 = [hroi.label[k, hroi.label[k] > 0] for k in range(hroi.k)]
     hroi.set_feature('labels2', labels2)
     hroi.merge_descending()
     assert_equal(hroi.k, 1)
@@ -210,13 +208,13 @@ def test_sd_representative():
     hroi = make_hroi()
     hroi.parents = np.arange(9)
     hroi.parents[2] = 1
-    data = [[k] * hroi.get_size(k) for k in hroi.get_id()]
+    data = [[k] * hroi.get_size(k) for k in hroi.get_ids()]
     hroi.set_feature('data', data)
     sums = hroi.representative_feature('data')
-    for k in hroi.get_id():
+    for k in hroi.get_ids():
         assert_equal(sums[hroi.select_id(k)], k)
     sums2 = hroi.representative_feature('data', ignore_children=False)
-    for k in hroi.get_id():
+    for k in hroi.get_ids():
         if k != 1:
             assert_equal(sums2[hroi.select_id(k)], k)
         else:
