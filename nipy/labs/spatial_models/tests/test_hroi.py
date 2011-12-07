@@ -124,7 +124,8 @@ def test_asc_merge_4():
     parents = np.arange(9) - 1
     parents[0] = 0
     hroi.parents = parents
-    labels3 = [hroi.label[k, hroi.label[k] > 0.] for k in range(hroi.k)]
+    labels3 = [[k] * hroi.label.tocsr()[k].nonzero()[1].size \
+                   for k in range(hroi.k)]
     hroi.set_feature('labels3', labels3)
     hroi.merge_ascending([1], pull_features=['labels2'])
     assert_equal(hroi.k, 8)
@@ -154,7 +155,8 @@ def test_desc_merge_2():
     parents[0] = 0
     hroi.parents = parents
     hroi.set_roi_feature('labels', np.arange(hroi.k))
-    labels2 = [hroi.label[k, hroi.label[k] > 0] for k in range(hroi.k)]
+    labels2 = [[k] * hroi.label.tocsr()[k].nonzero()[1].size \
+                   for k in range(hroi.k)]
     hroi.set_feature('labels2', labels2)
     hroi.merge_descending()
     assert_equal(hroi.k, 1)

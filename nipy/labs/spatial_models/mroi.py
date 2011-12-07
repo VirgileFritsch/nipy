@@ -64,15 +64,23 @@ class SubDomains(object):
           should access ROI through their id to avoid hazardous manipulations.
 
         """
-        label = np.asarray(label)
+        if not isinstance(label, sps.coo.coo_matrix):
+            label = np.asarray(label)
+
         if label.size == 0:
-            self.label = np.asarray([])
+            if isinstance(label, sps.coo.coo_matrix):
+                self.label = sps.coo_matrix(([], ([], [])), shape=label.shape)
+            else:
+                raise ValueError("empty labels")
         elif label.ndim == 2 and label.shape[1] == domain.size:
             if label.shape[1] != domain.size:
                 raise ValueError("inconsistent dimensions of labels")
-            label[label > 0] = 1.
-            label[label != 1] = 0.
-            self.label = label
+            if isinstance(label, sps.coo.coo_matrix):
+                self.label = label
+            else:
+                self.label = sps.coo_matrix(
+                    (np.ones(np.sum(label > 0)), np.where(label > 0)),
+                    shape=label.shape)
         else:
             # check that label shape is consistent with domain
             if np.size(label) != domain.size:
@@ -84,13 +92,13 @@ class SubDomains(object):
                 label[label == k] = i
             # convert labels to a matrix
             if np.max(label) > -1:
-                label = sps.coo_matrix(
+                self.label = sps.coo_matrix(
                     (np.ones(np.sum(label > -1)),
-                     ((label[label > -1], np.where(label > -1)[0]))),
+                     (label[label > -1], np.where(label > -1)[0])),
                     shape=(np.max(label) + 1, label.size))
-                self.label = np.asarray(label.todense())
             else:
-                self.label = np.asarray([])
+                self.label = sps.coo_matrix(
+                    ([], ([], [])), shape=(1, label.size))
         self.domain = domain
         self.update_roi_number()
 
@@ -123,7 +131,17 @@ class SubDomains(object):
 
         """
         if self.label.size > 0:
-            self.label = self.label[self.label.sum(1) > 0.]
+            valid_rows = np.where(self.label.tocsr().sum(1) > 0.)[0]
+            valid_mask = np.asarray(
+                [(i in valid_rows) for i in self.label.row])
+            new_data = np.ones(valid_mask.sum())
+            new_row = self.label.row[valid_mask]
+            for i, k in enumerate(np.sort(np.unique(new_row))):
+                new_row[new_row == k] = i
+            new_col = self.label.col[valid_mask]
+            self.label = sps.coo_matrix(
+                (new_data, (new_row, new_col)),
+                shape=(valid_rows.size, self.label.shape[1]))
             # update number of ROIs
             self.k = self.label.shape[0]
         else:
@@ -163,7 +181,7 @@ class SubDomains(object):
         if roi:
             index = int(np.where(self.get_ids() == id)[0])
         else:
-            index = np.where(self.label[self.select_id(id)] > 0)[0]
+            index = self.label.tocsr()[self.select_id(id)].nonzero()[1]
         return index
 
     ###
@@ -657,7 +675,7 @@ class SubDomains(object):
         if fid is None:
             # write a binary representation of the domain if no fid provided
             nim = self.domain.to_image(
-                data=(self.label.sum(0) > 0).astype(int))
+                data=(self.label.tocsc().sum(0) > 0).astype(int))
             if descrip is None:
                 descrip = 'binary representation of MROI'
         else:
@@ -716,7 +734,7 @@ class SubDomains(object):
         # set new labels (= map between voxels and ROI)
         for id in self.get_ids():
             if id not in id_list:
-                self.label[self.select_id(id)] = 0.
+                self.label.data[self.label.row == self.select_id(id)] = 0.
         self.update_roi_number()
         self.roi_features['id'] = np.ravel([id_list])
 

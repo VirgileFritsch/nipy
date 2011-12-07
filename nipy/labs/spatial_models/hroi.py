@@ -13,6 +13,7 @@ Author : Bertrand Thirion, 2009-2011
 """
 
 import numpy as np
+import scipy.sparse as sps
 
 from nipy.algorithms.graph.graph import WeightedGraph
 from nipy.algorithms.graph.forest import Forest
@@ -393,8 +394,20 @@ class HierarchicalROI(SubDomains):
                 self.parents[self.parents > former_pos] = \
                     self.parents[self.parents > former_pos] - 1
                 # merge labels
-                self.label[p_pos, self.select_id(c_id, roi=False)] = 1.
-                self.label[c_pos] = 0.
+                #self.label[p_pos, self.select_id(c_id, roi=False)] = 1.
+                #self.label[c_pos] = 0.
+                new_pos = self.select_id(c_id, roi=False)
+                c_ind = np.where(self.label.row == c_pos)[0]
+                new_data = np.ones(
+                    self.label.data.size + new_pos.size - c_ind.size)
+                new_row = np.concatenate(
+                    (self.label.row[self.label.row != c_pos],
+                     [p_pos] * new_pos.size))
+                new_col = np.concatenate(
+                    (self.label.col[self.label.row != c_pos],
+                     new_pos))
+                self.label = sps.coo_matrix(
+                    (new_data, (new_row, new_col)), shape=self.label.shape)
                 # set ids
                 dj = self.get_roi_feature('id')
                 if 'id' in pull_features:
@@ -475,13 +488,24 @@ class HierarchicalROI(SubDomains):
                 if self.parents[c_pos] == p_pos:
                     self.parents[c_pos] = c_pos
                 former_pos = np.where(np.arange(self.k) == p_pos)[0]
-                #import pdb; pdb.set_trace()
                 self.parents = self.parents[np.arange(self.k) != p_pos]
                 self.parents[self.parents > former_pos] = \
                     self.parents[self.parents > former_pos] - 1
                 # merge labels
-                self.label[c_pos, self.select_id(p_id, roi=False)] = 1.
-                self.label[p_pos] = 0.
+                #self.label[c_pos, self.select_id(p_id, roi=False)] = 1.
+                #self.label[p_pos] = 0.
+                new_pos = self.select_id(p_id, roi=False)
+                p_ind = np.where(self.label.row == p_pos)[0]
+                new_data = np.ones(
+                    self.label.data.size + new_pos.size - p_ind.size)
+                new_row = np.concatenate(
+                    (self.label.row[self.label.row != p_pos],
+                     [c_pos] * new_pos.size))
+                new_col = np.concatenate(
+                    (self.label.col[self.label.row != p_pos],
+                     new_pos))
+                self.label = sps.coo_matrix(
+                    (new_data, (new_row, new_col)), shape=self.label.shape)
                 # set ids
                 dj = self.get_roi_feature('id')
                 if 'id' in pull_features:

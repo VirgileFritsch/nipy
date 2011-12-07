@@ -48,8 +48,9 @@ def test_subdomain2():
     mroi = make_subdomain()
     assert_equal(len(mroi.get_size()), 8)
     for k in mroi.get_ids():
-        assert_equal(mroi.get_size(k),
-                     np.sum(mroi.label[mroi.select_id(k)]))
+        assert_equal(
+            mroi.get_size(k),
+            np.size(mroi.label.tocsr()[mroi.select_id(k)].nonzero()[1]))
 
 
 def test_copy_subdomain():
@@ -81,7 +82,7 @@ def test_select_roi():
     """
     mroi = make_subdomain()
     aux = np.random.randn(np.prod(shape))
-    data = [aux[mroi.label[k] > 0.] for k in range(8)]
+    data = [aux[mroi.select_id(k, roi=False)] for k in mroi.get_ids()]
     mroi.set_feature('data', data)
     mroi.set_roi_feature('data_mean', range(8))
     mroi.select_roi([0])
@@ -94,7 +95,7 @@ def test_subdomain_feature():
     """
     mroi = make_subdomain()
     aux = np.random.randn(np.prod(shape))
-    data = [aux[mroi.label[k] > 0.] for k in range(8)]
+    data = [aux[mroi.select_id(k, roi=False)] for k in mroi.get_ids()]
     mroi.set_feature('data', data)
     assert_equal(mroi.features['data'][0], data[0])
 
@@ -104,7 +105,7 @@ def test_sd_integrate():
     """
     mroi = make_subdomain()
     aux = np.random.randn(np.prod(shape))
-    data = [aux[mroi.label[k] > 0.] for k in range(8)]
+    data = [aux[mroi.select_id(k, roi=False)] for k in mroi.get_ids()]
     mroi.set_feature('data', data)
     sums = mroi.integrate('data')
     for k in range(8):
