@@ -9,7 +9,7 @@ in ~/.nipy/tests/data
 
 import numpy as np
 from numpy.testing import assert_equal
-from ..mroi import *
+from ..mroi import mroi_from_array, mroi_from_balls
 from ..discrete_domain import domain_from_binary_array
 
 shape = (5, 6, 7)
@@ -51,7 +51,7 @@ def test_mroi2():
         assert_equal(
             mroi.get_size(k),
             np.size(mroi.voxels_to_rois_map.tocsr()[
-                    mroi.select_id(k)].nonzero()[1]))
+                    mroi.roi_from_id(k)].nonzero()[1]))
 
 
 def test_copy_mroi():
@@ -66,7 +66,8 @@ def test_copy_mroi():
     # check some properties of mroi
     assert_equal(mroi.k, 8)
     for k in mroi.get_ids():
-        assert_equal(mroi.get_feature('a', k), foo_feature[mroi.select_id(k)])
+        assert_equal(mroi.get_feature('a', k),
+                     foo_feature[mroi.roi_from_id(k)])
     assert_equal(mroi.get_roi_feature('b'), foo_roi_feature)
     # delete mroi
     del mroi
@@ -74,19 +75,19 @@ def test_copy_mroi():
     assert_equal(mroi_copy.k, 8)
     for k in mroi_copy.get_ids():
         assert_equal(mroi_copy.get_feature('a', k),
-                     foo_feature[mroi_copy.select_id(k)])
+                     foo_feature[mroi_copy.roi_from_id(k)])
     assert_equal(mroi_copy.get_roi_feature('b'), foo_roi_feature)
 
 
-def test_select_roi():
+def test_select_rois():
     """
     """
     mroi = make_mroi()
     aux = np.random.randn(np.prod(shape))
-    data = [aux[mroi.select_id(k, roi=False)] for k in mroi.get_ids()]
+    data = [aux[mroi.roi_from_id(k, roi=False)] for k in mroi.get_ids()]
     mroi.set_feature('data', data)
     mroi.set_roi_feature('data_mean', range(8))
-    mroi.select_roi([0])
+    mroi.select_rois([0])
     assert(mroi.k == 1)
     assert_equal(mroi.get_roi_feature('data_mean', 0), 0)
 
@@ -96,7 +97,7 @@ def test_mroi_feature():
     """
     mroi = make_mroi()
     aux = np.random.randn(np.prod(shape))
-    data = [aux[mroi.select_id(k, roi=False)] for k in mroi.get_ids()]
+    data = [aux[mroi.roi_from_id(k, roi=False)] for k in mroi.get_ids()]
     mroi.set_feature('data', data)
     assert_equal(mroi.features['data'][0], data[0])
 
@@ -106,7 +107,7 @@ def test_sd_integrate():
     """
     mroi = make_mroi()
     aux = np.random.randn(np.prod(shape))
-    data = [aux[mroi.select_id(k, roi=False)] for k in mroi.get_ids()]
+    data = [aux[mroi.roi_from_id(k, roi=False)] for k in mroi.get_ids()]
     mroi.set_feature('data', data)
     sums = mroi.integrate('data')
     for k in range(8):
@@ -133,7 +134,7 @@ def test_sd_representative():
     mroi.set_feature('data', data)
     sums = mroi.representative_feature('data')
     for k in mroi.get_ids():
-        assert_equal(sums[mroi.select_id(k)], k)
+        assert_equal(sums[mroi.roi_from_id(k)], k)
 
 
 def test_sd_from_ball():
@@ -150,7 +151,7 @@ def test_set_feature():
     """
     mroi = make_mroi()
     data = np.random.randn(np.prod(shape))
-    feature_data = [data[mroi.select_id(k, roi=False)]
+    feature_data = [data[mroi.roi_from_id(k, roi=False)]
                     for k in mroi.get_ids()]
     mroi.set_feature('data', feature_data)
     get_feature_output = mroi.get_feature('data')
@@ -158,9 +159,9 @@ def test_set_feature():
                  mroi.get_size())
     for k in mroi.get_ids():
         assert_equal(mroi.get_feature('data', k),
-                     data[mroi.select_id(k, roi=False)])
+                     data[mroi.roi_from_id(k, roi=False)])
         assert_equal(get_feature_output[k],
-                     data[mroi.select_id(k, roi=False)])
+                     data[mroi.roi_from_id(k, roi=False)])
 
 
 def test_set_feature2():
@@ -168,7 +169,7 @@ def test_set_feature2():
     """
     mroi = make_mroi()
     data = np.random.randn(np.prod(shape))
-    feature_data = [data[mroi.select_id(k, roi=False)]
+    feature_data = [data[mroi.roi_from_id(k, roi=False)]
                     for k in mroi.get_ids()]
     mroi.set_feature('data', feature_data)
     mroi.set_feature('data', np.asarray([1000]), id=0, override=True)
@@ -181,7 +182,7 @@ def test_get_coord():
     mroi = make_mroi()
     for k in mroi.get_ids():
         assert_equal(mroi.get_coord(k),
-                     mroi.domain.coord[mroi.select_id(k, roi=False)])
+                     mroi.domain.coord[mroi.roi_from_id(k, roi=False)])
 
 if __name__ == "__main__":
     import nose

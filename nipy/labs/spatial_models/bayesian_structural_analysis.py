@@ -148,7 +148,7 @@ def compute_individual_regions(domain, lbeta, smin=5, theta=3.0,
 
         if nroi is not None and nroi.k > 0:
             bfm = nroi.representative_feature('signal', 'weighted mean')
-            bfm = bfm[[nroi.select_id(id) for id in nroi.get_leaves_id()]]
+            bfm = bfm[[nroi.roi_from_id(id) for id in nroi.get_leaves_id()]]
             # get the regions position
             if reshuffle:
                 nroi.reduce_to_leaves()
@@ -160,7 +160,7 @@ def compute_individual_regions(domain, lbeta, smin=5, theta=3.0,
                 mean_pos = np.asarray(
                     [np.mean(coords, 0) for coords in nroi.get_coord()])
                 nroi.set_roi_feature('position', mean_pos)
-                bfc = mean_pos[[nroi.select_id(id)
+                bfc = mean_pos[[nroi.roi_from_id(id)
                                 for id in nroi.get_leaves_id()]]
             gfc.append(bfc)
 
@@ -293,7 +293,7 @@ def bsa_dpmm(bf, gf0, sub, gfc, dmax, thq, ths, verbose=0):
     for s in range(n_subj):
         bfs = bf[s]
         if bfs.k > 0:
-            leaves_pos = [bfs.select_id(k) for k in bfs.get_leaves_id()]
+            leaves_pos = [bfs.roi_from_id(k) for k in bfs.get_leaves_id()]
             us = - np.ones(bfs.k).astype(np.int)
 
             # set posterior proba
@@ -401,7 +401,7 @@ def bsa_dpmm2(bf, gf0, sub, gfc, dmax, thq, ths, verbose):
         bfs = bf[s]
         if bfs is not None:
             leaves = np.asarray(
-                [bfs.select_id(id) for id in bfs.get_leaves_id()])
+                [bfs.roi_from_id(id) for id in bfs.get_leaves_id()])
             us = - np.ones(bfs.k).astype(np.int)
             lq = np.zeros(bfs.k)
             lq[leaves] = q[sub == s]

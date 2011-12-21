@@ -69,7 +69,7 @@ def hroi_agglomeration(input_hroi, criterion='size', smin=0):
             break
 
     # finally remove those regions for which the criterion cannot be matched
-    output_hroi.select_roi(output_hroi.get_ids()[value > smin])
+    output_hroi.select_rois(output_hroi.get_ids()[value > smin])
     return output_hroi
 
 
@@ -108,7 +108,7 @@ def HROI_as_discrete_domain_blobs(domain, data, threshold=NINF, smin=0,
     nroi = HierarchicalROI(domain, label, parents)
     # create a signal feature
     data = np.ravel(data)
-    signal = [data[nroi.select_id(id, roi=False)] for id in nroi.get_ids()]
+    signal = [data[nroi.roi_from_id(id, roi=False)] for id in nroi.get_ids()]
     nroi.set_feature('signal', signal)
     # agglomerate regions in order to compact the structure if necessary
     nroi = hroi_agglomeration(nroi, criterion=criterion, smin=smin)
@@ -216,7 +216,7 @@ class HierarchicalROI(MultipleROI):
             if id is not None:
                 volume = MultipleROI.get_volume(self, id)
                 desc = self.make_forest().get_descendents(
-                    self.select_id(id), exclude_self=True)
+                    self.roi_from_id(id), exclude_self=True)
                 # get children volume
                 for k in desc:
                     volume = volume + MultipleROI.get_volume(
@@ -226,7 +226,7 @@ class HierarchicalROI(MultipleROI):
                 for id in self.get_ids():
                     roi_volume = MultipleROI.get_volume(self, id)
                     desc = self.make_forest().get_descendents(
-                        self.select_id(id), exclude_self=True)
+                        self.roi_from_id(id), exclude_self=True)
                     # get children volume
                     for k in desc:
                         roi_volume = roi_volume + MultipleROI.get_volume(
@@ -263,7 +263,7 @@ class HierarchicalROI(MultipleROI):
             if id is not None:
                 size = MultipleROI.get_size(self, id)
                 desc = self.make_forest().get_descendents(
-                    self.select_id(id), exclude_self=True)
+                    self.roi_from_id(id), exclude_self=True)
                 # get children size
                 for k in desc:
                     size = size + MultipleROI.get_size(self, self.get_ids()[k])
@@ -272,7 +272,7 @@ class HierarchicalROI(MultipleROI):
                 for id in self.get_ids():
                     roi_size = MultipleROI.get_size(self, id)
                     desc = self.make_forest().get_descendents(
-                        self.select_id(id), exclude_self=True)
+                        self.roi_from_id(id), exclude_self=True)
                     # get children size
                     for k in desc:
                         roi_size = roi_size + MultipleROI.get_size(
@@ -280,7 +280,7 @@ class HierarchicalROI(MultipleROI):
                     size.append(roi_size)
         return size
 
-    def select_roi(self, id_list):
+    def select_rois(self, id_list):
         """Returns an instance of HROI with only the subset of chosen ROIs.
 
         The hierarchy is set accordingly.
@@ -302,7 +302,7 @@ class HierarchicalROI(MultipleROI):
             # get new parents
             new_parents = Forest(self.k, self.parents).subforest(
                 valid.astype(np.bool)).parents.astype(np.int)
-            MultipleROI.select_roi(self, id_list)
+            MultipleROI.select_rois(self, id_list)
         self.parents = new_parents
         self.update_roi_number()
 
@@ -355,7 +355,7 @@ class HierarchicalROI(MultipleROI):
         for c_old_id in id_list:
             # define alias for clearer indexing
             c_id = map_id[c_old_id]
-            c_pos = self.select_id(c_id)
+            c_pos = self.roi_from_id(c_id)
             p_pos = self.parents[c_pos]
             p_id = self.get_ids()[p_pos]
             if p_pos != c_pos:
@@ -364,10 +364,10 @@ class HierarchicalROI(MultipleROI):
                     # preserve voxels order in the feature
                     c_mask = np.zeros(
                         self.voxels_to_rois_map.shape[1], dtype=bool)
-                    c_mask[self.select_id(c_id, roi=False)] = True
+                    c_mask[self.roi_from_id(c_id, roi=False)] = True
                     p_mask = np.zeros(
                         self.voxels_to_rois_map.shape[1], dtype=bool)
-                    p_mask[self.select_id(p_id, roi=False)] = True
+                    p_mask[self.roi_from_id(p_id, roi=False)] = True
                     # build new feature
                     c_feature = self.get_feature(fid, c_id)
                     p_feature = self.get_feature(fid, p_id)
@@ -398,9 +398,9 @@ class HierarchicalROI(MultipleROI):
                     self.parents[self.parents > former_pos] - 1
                 # merge labels
                 #self.voxels_to_rois_map[
-                #p_pos, self.select_id(c_id, roi=False)] = 1.
+                #p_pos, self.roi_from_id(c_id, roi=False)] = 1.
                 #self.voxels_to_rois_map[c_pos] = 0.
-                new_pos = self.select_id(c_id, roi=False)
+                new_pos = self.roi_from_id(c_id, roi=False)
                 c_ind = np.where(self.voxels_to_rois_map.row == c_pos)[0]
                 new_data = np.ones(
                     self.voxels_to_rois_map.data.size + new_pos.size \
@@ -452,7 +452,7 @@ class HierarchicalROI(MultipleROI):
         id_list = self.get_ids()[:: - 1]
         for p_old_id in id_list:
             p_id = map_id[p_old_id]
-            p_pos = self.select_id(p_id)
+            p_pos = self.roi_from_id(p_id)
             p_children = np.nonzero(self.parents == p_pos)[0]
             if p_pos in p_children:
                 # remove current node from its children list
@@ -467,10 +467,10 @@ class HierarchicalROI(MultipleROI):
                     # preserve voxels order in the feature
                     c_mask = np.zeros(
                         self.voxels_to_rois_map.shape[1], dtype=bool)
-                    c_mask[self.select_id(c_id, roi=False)] = True
+                    c_mask[self.roi_from_id(c_id, roi=False)] = True
                     p_mask = np.zeros(
                         self.voxels_to_rois_map.shape[1], dtype=bool)
-                    p_mask[self.select_id(p_id, roi=False)] = True
+                    p_mask[self.roi_from_id(p_id, roi=False)] = True
                     # build new feature
                     c_feature = self.get_feature(fid, c_id)
                     p_feature = self.get_feature(fid, p_id)
@@ -503,9 +503,9 @@ class HierarchicalROI(MultipleROI):
                     self.parents[self.parents > former_pos] - 1
                 # merge labels
                 #self.voxels_to_rois_map[
-                #c_pos, self.select_id(p_id, roi=False)] = 1.
+                #c_pos, self.roi_from_id(p_id, roi=False)] = 1.
                 #self.voxels_to_rois_map[p_pos] = 0.
-                new_pos = self.select_id(p_id, roi=False)
+                new_pos = self.roi_from_id(p_id, roi=False)
                 p_ind = np.where(self.voxels_to_rois_map.row == p_pos)[0]
                 new_data = np.ones(
                     self.voxels_to_rois_map.data.size + new_pos.size \
@@ -572,7 +572,7 @@ class HierarchicalROI(MultipleROI):
             return HierarchicalROI(
                 self.domain, -np.ones(self.domain.size), np.array([]))
         leaves_id = self.get_leaves_id()
-        self.select_roi(leaves_id)
+        self.select_rois(leaves_id)
 
     def copy(self):
         """ Returns a copy of self.
@@ -622,7 +622,7 @@ class HierarchicalROI(MultipleROI):
         feature_quality = np.zeros(self.k)
         for i, k in enumerate(self.get_ids()):
             f = self.get_feature(fid, k)
-            p_pos = self.select_id(k)
+            p_pos = self.roi_from_id(k)
             if not ignore_children:
                 # also include the children features
                 desc = np.nonzero(self.parents == p_pos)[0]
@@ -648,7 +648,7 @@ class HierarchicalROI(MultipleROI):
                     for c in desc:
                         lvk = np.concatenate(
                             (lvk,
-                             self.get_local_volume(fid, self.select_id(c))))
+                             self.get_local_volume(fid, self.roi_from_id(c))))
                 tmp = np.dot(lvk[~nan], f[~nan].reshape((-1, 1))) / \
                     np.maximum(eps, np.sum(lvk[~nan]))
                 rf.append(tmp)
@@ -659,7 +659,7 @@ class HierarchicalROI(MultipleROI):
             if method == "median":
                 rf.append(np.median(f[~nan], 0))
         if id is not None:
-            summary_feature = rf[self.select_id(id)]
+            summary_feature = rf[self.roi_from_id(id)]
         else:
             summary_feature = rf
 

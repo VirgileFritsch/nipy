@@ -7,7 +7,7 @@ Caveat assumes that the MNI template image is available at
 in ~/.nipy/tests/data
 
 In those tests, we often access some ROI directly by a fixed index
-instead of using the utility functions such as get_ids() or select_id().
+instead of using the utility functions such as get_ids() or roi_from_id().
 
 """
 
@@ -67,7 +67,7 @@ def test_hroi_isleaf():
     """ Test basic construction of a tree of isolated leaves
     """
     hroi = make_hroi()
-    hroi.select_roi([0] + range(2, 9))
+    hroi.select_rois([0] + range(2, 9))
     assert_equal(hroi.k, 8)
 
 
@@ -75,7 +75,7 @@ def test_hroi_isleaf_2():
     """Test tree pruning, with parent remapping
     """
     hroi = make_hroi()
-    hroi.select_roi(range(1, 9))
+    hroi.select_rois(range(1, 9))
     assert_equal(hroi.parents, np.arange(8).astype(np.int))
 
 
@@ -214,11 +214,11 @@ def test_sd_representative():
     hroi.set_feature('data', data)
     sums = hroi.representative_feature('data')
     for k in hroi.get_ids():
-        assert_equal(sums[hroi.select_id(k)], k)
+        assert_equal(sums[hroi.roi_from_id(k)], k)
     sums2 = hroi.representative_feature('data', ignore_children=False)
     for k in hroi.get_ids():
         if k != 1:
-            assert_equal(sums2[hroi.select_id(k)], k)
+            assert_equal(sums2[hroi.roi_from_id(k)], k)
         else:
             assert_equal(sums2[1], 17. / 9)
 
