@@ -18,7 +18,7 @@ import scipy.sparse as sps
 from nipy.algorithms.graph.graph import WeightedGraph
 from nipy.algorithms.graph.forest import Forest
 from nipy.algorithms.graph.field import field_from_coo_matrix_and_data
-from .mroi import SubDomains
+from .mroi import MultipleROI
 
 NINF = -np.infty
 
@@ -150,13 +150,13 @@ def HROI_from_watershed(domain, data, threshold=NINF):
 ########################################################################
 # Hierarchical ROI
 ########################################################################
-class HierarchicalROI(SubDomains):
+class HierarchicalROI(MultipleROI):
     """Class that handles hierarchical ROIs
 
     Parameters
     ----------
     `k`: int,
-      Number of ROI in the SubDomains object
+      Number of ROI in the MultipleROI object
     `label`: array of shape (domain.size), dtype=np.int,
       An array use to define which voxel belongs to which ROI.
       The label values greater than -1 correspond to subregions
@@ -181,7 +181,7 @@ class HierarchicalROI(SubDomains):
     def __init__(self, domain, label, parents, id=None):
         """Building the HierarchicalROI
         """
-        SubDomains.__init__(self, domain, label, id=id)
+        MultipleROI.__init__(self, domain, label, id=id)
         self.parents = np.ravel(parents).astype(np.int)
 
     ###
@@ -210,26 +210,26 @@ class HierarchicalROI(SubDomains):
         """
         if ignore_children:
             # volume of the children is not included
-            volume = SubDomains.get_volume(self, id)
+            volume = MultipleROI.get_volume(self, id)
         else:
             # volume of the children is included
             if id is not None:
-                volume = SubDomains.get_volume(self, id)
+                volume = MultipleROI.get_volume(self, id)
                 desc = self.make_forest().get_descendents(
                     self.select_id(id), exclude_self=True)
                 # get children volume
                 for k in desc:
-                    volume = volume + SubDomains.get_volume(
+                    volume = volume + MultipleROI.get_volume(
                         self, self.get_ids()[k])
             else:
                 volume = []
                 for id in self.get_ids():
-                    roi_volume = SubDomains.get_volume(self, id)
+                    roi_volume = MultipleROI.get_volume(self, id)
                     desc = self.make_forest().get_descendents(
                         self.select_id(id), exclude_self=True)
                     # get children volume
                     for k in desc:
-                        roi_volume = roi_volume + SubDomains.get_volume(
+                        roi_volume = roi_volume + MultipleROI.get_volume(
                             self, self.get_ids()[k])
                     volume.append(roi_volume)
         return volume
@@ -257,25 +257,25 @@ class HierarchicalROI(SubDomains):
         """
         if ignore_children:
             # size of the children is not included
-            size = SubDomains.get_size(self, id)
+            size = MultipleROI.get_size(self, id)
         else:
             # size of the children is included
             if id is not None:
-                size = SubDomains.get_size(self, id)
+                size = MultipleROI.get_size(self, id)
                 desc = self.make_forest().get_descendents(
                     self.select_id(id), exclude_self=True)
                 # get children size
                 for k in desc:
-                    size = size + SubDomains.get_size(self, self.get_ids()[k])
+                    size = size + MultipleROI.get_size(self, self.get_ids()[k])
             else:
                 size = []
                 for id in self.get_ids():
-                    roi_size = SubDomains.get_size(self, id)
+                    roi_size = MultipleROI.get_size(self, id)
                     desc = self.make_forest().get_descendents(
                         self.select_id(id), exclude_self=True)
                     # get children size
                     for k in desc:
-                        roi_size = roi_size + SubDomains.get_size(
+                        roi_size = roi_size + MultipleROI.get_size(
                             self, self.get_ids()[k])
                     size.append(roi_size)
         return size
@@ -301,7 +301,7 @@ class HierarchicalROI(SubDomains):
             # get new parents
             new_parents = Forest(self.k, self.parents).subforest(
                 valid.astype(np.bool)).parents.astype(np.int)
-            SubDomains.select_roi(self, id_list)
+            MultipleROI.select_roi(self, id_list)
         self.parents = new_parents
         self.update_roi_number()
 
@@ -566,7 +566,8 @@ class HierarchicalROI(SubDomains):
 
         """
         cp = HierarchicalROI(
-            self.domain, self.label.copy(), self.parents.copy(), self.get_ids())
+            self.domain, self.label.copy(),
+            self.parents.copy(), self.get_ids())
         # copy features
         for fid in self.features.keys():
             cp.set_feature(fid, self.get_feature(fid))
@@ -652,15 +653,15 @@ class HierarchicalROI(SubDomains):
         return np.array(summary_feature)
 
 
-def make_hroi_from_subdomain(sub_domain, parents):
-    """Instantiate an HROi from a SubDomain instance and parents
+def make_hroi_from_mroi(mroi, parents):
+    """Instantiate an HROi from a MultipleROI instance and parents
 
     """
-    hroi = HierarchicalROI(sub_domain.domain, sub_domain.label, parents)
+    hroi = HierarchicalROI(mroi.domain, mroi.label, parents)
     # set features
-    for fid in sub_domain.features.keys():
-        hroi.set_feature(fid, sub_domain.get_feature(fid))
+    for fid in mroi.features.keys():
+        hroi.set_feature(fid, mroi.get_feature(fid))
     # set ROI features
-    for fid in sub_domain.roi_features.keys():
-        hroi.set_roi_feature(fid, sub_domain.get_roi_feature(fid))
+    for fid in mroi.roi_features.keys():
+        hroi.set_roi_feature(fid, mroi.get_roi_feature(fid))
     return hroi

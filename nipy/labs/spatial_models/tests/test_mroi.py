@@ -16,10 +16,10 @@ shape = (5, 6, 7)
 
 
 ###########################################################
-# SubDomains tests
+# MultipleROI tests
 ###########################################################
 
-def make_subdomain():
+def make_mroi():
     """Create a multiple ROI instance
     """
     labels = np.zeros(shape)
@@ -31,21 +31,21 @@ def make_subdomain():
     labels[4:, 0:2, 0:2] = 6
     labels[4:, 5:, 0:2] = 7
     labels[:2, 5:, 0:2] = 8
-    mroi = subdomain_from_array(labels - 1, affine=None)
+    mroi = mroi_from_array(labels - 1, affine=None)
     return mroi
 
 
-def test_subdomain():
+def test_mroi():
     """Test basic construction of multiple_roi
     """
-    mroi = make_subdomain()
+    mroi = make_mroi()
     assert_equal(mroi.k, 8)
 
 
-def test_subdomain2():
+def test_mroi2():
     """Test mroi.size
     """
-    mroi = make_subdomain()
+    mroi = make_mroi()
     assert_equal(len(mroi.get_size()), 8)
     for k in mroi.get_ids():
         assert_equal(
@@ -53,10 +53,10 @@ def test_subdomain2():
             np.size(mroi.label.tocsr()[mroi.select_id(k)].nonzero()[1]))
 
 
-def test_copy_subdomain():
+def test_copy_mroi():
     """Test basic construction of multiple_roi
     """
-    mroi = make_subdomain()
+    mroi = make_mroi()
     foo_feature = [[i] * j for i, j in enumerate(mroi.get_size())]
     foo_roi_feature = np.arange(mroi.k)
     mroi.set_feature('a', foo_feature)
@@ -80,7 +80,7 @@ def test_copy_subdomain():
 def test_select_roi():
     """
     """
-    mroi = make_subdomain()
+    mroi = make_mroi()
     aux = np.random.randn(np.prod(shape))
     data = [aux[mroi.select_id(k, roi=False)] for k in mroi.get_ids()]
     mroi.set_feature('data', data)
@@ -90,10 +90,10 @@ def test_select_roi():
     assert_equal(mroi.get_roi_feature('data_mean', 0), 0)
 
 
-def test_subdomain_feature():
+def test_mroi_feature():
     """Test the basic construction of features
     """
-    mroi = make_subdomain()
+    mroi = make_mroi()
     aux = np.random.randn(np.prod(shape))
     data = [aux[mroi.select_id(k, roi=False)] for k in mroi.get_ids()]
     mroi.set_feature('data', data)
@@ -103,7 +103,7 @@ def test_subdomain_feature():
 def test_sd_integrate():
     """Test the integration
     """
-    mroi = make_subdomain()
+    mroi = make_mroi()
     aux = np.random.randn(np.prod(shape))
     data = [aux[mroi.select_id(k, roi=False)] for k in mroi.get_ids()]
     mroi.set_feature('data', data)
@@ -115,7 +115,7 @@ def test_sd_integrate():
 def test_sd_integrate2():
     """Test the integration
     """
-    mroi = make_subdomain()
+    mroi = make_mroi()
     for k in mroi.get_ids():
         assert_equal(mroi.get_volume(k), mroi.integrate(id=k))
     volume_from_integration = mroi.integrate()
@@ -127,7 +127,7 @@ def test_sd_integrate2():
 def test_sd_representative():
     """Test the computation of representative features
     """
-    mroi = make_subdomain()
+    mroi = make_mroi()
     data = [[k] * mroi.get_size(k) for k in mroi.get_ids()]
     mroi.set_feature('data', data)
     sums = mroi.representative_feature('data')
@@ -139,15 +139,15 @@ def test_sd_from_ball():
     dom = domain_from_binary_array(np.ones((10, 10)))
     radii = np.array([2, 2, 2])
     positions = np.array([[3, 3], [3, 7], [7, 7]])
-    subdomain = subdomain_from_balls(dom, positions, radii)
-    assert_equal(subdomain.k, 3)
-    assert_equal(subdomain.get_size(), np.array([9, 9, 9]))
+    mroi = mroi_from_balls(dom, positions, radii)
+    assert_equal(mroi.k, 3)
+    assert_equal(mroi.get_size(), np.array([9, 9, 9]))
 
 
 def test_set_feature():
     """Test the feature building capability
     """
-    mroi = make_subdomain()
+    mroi = make_mroi()
     data = np.random.randn(np.prod(shape))
     feature_data = [data[mroi.select_id(k, roi=False)]
                     for k in mroi.get_ids()]
@@ -165,7 +165,7 @@ def test_set_feature():
 def test_set_feature2():
     """
     """
-    mroi = make_subdomain()
+    mroi = make_mroi()
     data = np.random.randn(np.prod(shape))
     feature_data = [data[mroi.select_id(k, roi=False)]
                     for k in mroi.get_ids()]
@@ -177,7 +177,7 @@ def test_set_feature2():
 def test_get_coord():
     """
     """
-    mroi = make_subdomain()
+    mroi = make_mroi()
     for k in mroi.get_ids():
         assert_equal(mroi.get_coord(k),
                      mroi.domain.coord[mroi.select_id(k, roi=False)])

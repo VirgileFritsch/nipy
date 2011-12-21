@@ -10,9 +10,9 @@ from . import discrete_domain as ddom
 
 
 ##############################################################################
-# class SubDomains
+# class MultipleROI
 ##############################################################################
-class SubDomains(object):
+class MultipleROI(object):
     """
     This is a class to represent multiple ROI objects, where the
     reference to a given domain is explicit.
@@ -27,7 +27,7 @@ class SubDomains(object):
     Parameters
     ----------
     `k`: int,
-      Number of ROI in the SubDomains object
+      Number of ROI in the MultipleROI object
     `label`: array of shape (domain.size), dtype=np.int,
       An array use to define which voxel belongs to which ROI.
       If label.shape == (domain.size, ), the label values greater
@@ -45,12 +45,12 @@ class SubDomains(object):
     """
 
     def __init__(self, domain, label, id=None):
-        """Initialize subdomains instance
+        """Initialize MultipleROI instance
 
         Parameters
         ----------
         domain: ROI instance
-          defines the spatial context of the SubDomains
+          defines the spatial context of the MultipleROI
         label: array of shape (domain.size), dtype=np.int,
                or array of shape (n_roi, domain.size), dtype=np.int
           An array use to define which voxel belongs to which ROI.
@@ -71,7 +71,8 @@ class SubDomains(object):
             if isinstance(label, sps.coo.coo_matrix):
                 self.label = sps.coo_matrix(([], ([], [])), shape=label.shape)
             else:
-                raise ValueError("empty labels")
+                self.label = sps.coo_matrix(
+                    ([], ([], [])), shape=(1, domain.size))
         elif label.ndim == 2 and label.shape[1] == domain.size:
             if label.shape[1] != domain.size:
                 raise ValueError("inconsistent dimensions of labels")
@@ -193,7 +194,7 @@ class SubDomains(object):
         Note that self.domain is not copied.
 
         """
-        cp = SubDomains(self.domain, self.label.copy(), id=self.get_ids())
+        cp = MultipleROI(self.domain, self.label.copy(), id=self.get_ids())
         for fid in self.features.keys():
             f = self.get_feature(fid)
             sf = [np.array(f[k]).copy() for k in range(self.k)]
@@ -727,7 +728,7 @@ class SubDomains(object):
         """
         # handle the case of an empty selection
         if len(id_list) == 0:
-            self = SubDomains(self.domain, -np.ones(self.label.shape[1]))
+            self = MultipleROI(self.domain, -np.ones(self.label.shape[1]))
             return
         # convert id to indices
         id_list_pos = np.ravel([self.select_id(k) for k in id_list])
@@ -755,32 +756,40 @@ class SubDomains(object):
                 self.set_roi_feature(fid, sf)
 
 
-def subdomain_from_array(labels, affine=None, nn=0):
-    """Return a SubDomain from an n-d int array
+def mroi_from_array(label_image, affine=None, nn=0, threshold=-1):
+    """Return a MultipleROI from an n-d int array
 
     Parameters
     ----------
-    label: np.array instance
-      A supposedly boolean array that yields the regions.
+    label_image: np.array instance
+      An array that yields the regions.
     affine: np.array, optional
       Affine transform that maps the array coordinates
       to some embedding space by default, this is np.eye(dim+1, dim+1).
     nn: int,
       Neighboring system considered.
       Unused at the moment.
+    threshold: float,
+      Threshold on labels to define the domain.
 
     Note
     ----
-    Only labels > -1 are considered.
+    Only labels > `threshold` are considered.
 
     """
-    dom = ddom.grid_domain_from_binary_array(
-        np.ones(labels.shape), affine=affine, nn=nn)
-    return SubDomains(dom, labels.astype(np.int))
+    mask = label_image > threshold
+    if mask.sum() == 0:
+        # if no label above the threshold, the subdomain becomes the whole img
+        dom = ddom.grid_domain_from_binary_array(
+            ~mask, affine=affine, nn=nn)
+    else:
+        dom = ddom.grid_domain_from_binary_array(
+            mask, affine=affine, nn=nn)
+    return MultipleROI(dom, label_image[mask].astype(np.int))
 
 
-def subdomain_from_image(mim, nn=18):
-    """Return a SubDomain instance from the input mask image.
+def mroi_from_image(mim, nn=18, threshold=-1):
+    """Return a MultipleROI instance from the input mask image.
 
     Parameters
     ----------
@@ -788,6 +797,8 @@ def subdomain_from_image(mim, nn=18):
       supposedly a label image
     nn: int, optional
       Neighboring system considered from the image can be 6, 18 or 26.
+    threshold: float,
+      Threshold on labels to define the domain.
 
     Returns
     -------
@@ -795,7 +806,7 @@ def subdomain_from_image(mim, nn=18):
 
     Note
     ----
-    Only labels > -1 are considered
+    Only labels > `threshold` are considered
 
     """
     if isinstance(mim, basestring):
@@ -803,10 +814,10 @@ def subdomain_from_image(mim, nn=18):
     else:
         iim = mim
 
-    return subdomain_from_array(iim.get_data(), iim.get_affine(), nn)
+    return mroi_from_array(iim.get_data(), iim.get_affine(), nn, threshold)
 
 
-def subdomain_from_position_and_image(nim, pos):
+def mroi_from_position_and_image(nim, pos):
     """Keep the set of labels of the image corresponding to a certain index
     so that their position is closest to the prescribed one.
 
@@ -818,14 +829,14 @@ def subdomain_from_position_and_image(nim, pos):
          the prescribed position
 
     """
-    tmp = subdomain_from_image(nim)
+    tmp = mroi_from_image(nim)
     coord = np.array([tmp.domain.coord[tmp.label == k].mean(0)
                       for k in range(tmp.k)])
     idx = ((coord - pos) ** 2).sum(1).argmin()
-    return subdomain_from_array(nim.get_data() == idx, nim.get_affine())
+    return mroi_from_array(nim.get_data() == idx, nim.get_affine())
 
 
-def subdomain_from_balls(domain, positions, radii):
+def mroi_from_balls(domain, positions, radii):
     """Create discrete ROIs as a set of balls within a certain
     coordinate systems.
 
@@ -853,4 +864,4 @@ def subdomain_from_balls(domain, positions, radii):
         supp = np.sum((domain.coord - positions[k]) ** 2, 1) < radii[k] ** 2
         label[supp] = k
 
-    return SubDomains(domain, label)
+    return MultipleROI(domain, label)

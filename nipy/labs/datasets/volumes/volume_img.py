@@ -120,6 +120,9 @@ class VolumeImg(VolumeGrid):
     def get_transform(self):
         return AffineTransform('voxel_space', self.world_space, self.affine)
 
+    def get_affine(self):
+        return self.affine
+
 
     # Inherit docstring
     get_transform.__doc__ = VolumeGrid.get_transform.__doc__

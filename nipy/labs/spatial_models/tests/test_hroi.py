@@ -14,8 +14,8 @@ instead of using the utility functions such as get_ids() or select_id().
 import numpy as np
 from numpy.testing import assert_equal
 
-from ..hroi import HROI_as_discrete_domain_blobs, make_hroi_from_subdomain
-from ..mroi import subdomain_from_array
+from ..hroi import HROI_as_discrete_domain_blobs, make_hroi_from_mroi
+from ..mroi import mroi_from_array
 from ..discrete_domain import domain_from_binary_array
 
 shape = (5, 6, 7)
@@ -51,8 +51,8 @@ def make_hroi(empty=False):
         labels = -np.ones(shape)
         parents = np.array([])
 
-    sd = subdomain_from_array(labels, affine=None, nn=0)
-    hroi = make_hroi_from_subdomain(sd, parents)
+    sd = mroi_from_array(labels, affine=None, nn=0)
+    hroi = make_hroi_from_mroi(sd, parents)
     return hroi
 
 

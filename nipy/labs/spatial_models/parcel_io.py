@@ -13,7 +13,7 @@ from nibabel import load, save, Nifti1Image
 
 from nipy.algorithms.clustering.clustering import kmeans
 from .discrete_domain import grid_domain_from_image
-from .mroi import SubDomains
+from .mroi import MultipleROI
 from ..mask import intersect_masks
 
 
@@ -47,7 +47,7 @@ def mask_parcellation(mask_images, nb_parcel, threshold=0, output_image=None):
 
     domain = grid_domain_from_image(mask)
     cent, labels, J = kmeans(domain.coord, nb_parcel)
-    sub_dom = SubDomains(domain, labels)
+    sub_dom = MultipleROI(domain, labels)
     # get id (or labels) image
     wim = sub_dom.to_image(fid='id', roi=True)
     return wim
@@ -158,7 +158,7 @@ def write_parcellation_images(Pa, template_path=None, indiv_path=None,
 
     # write the template image
     tlabs = Pa.template_labels.astype(np.int16)
-    template = SubDomains(Pa.domain, tlabs)
+    template = MultipleROI(Pa.domain, tlabs)
     template_img = template.to_image(
         fid='id', roi=True, descrip='Intra-subject parcellation template')
     save(template_img, template_path)
@@ -167,7 +167,7 @@ def write_parcellation_images(Pa, template_path=None, indiv_path=None,
     for s in range(Pa.nb_subj):
         # write the individual label images
         labs = Pa.individual_labels[:, s]
-        parcellation = SubDomains(Pa.domain, labs)
+        parcellation = MultipleROI(Pa.domain, labs)
         parcellation_img = parcellation.to_image(
             fid='id', roi=True, descrip='Intra-subject parcellation')
         save(parcellation_img, indiv_path[s])
@@ -219,7 +219,7 @@ def parcellation_based_analysis(Pa, test_images, test_id='one_sample',
     prfx = ttest(test_data)
 
     # Write the stuff
-    template = SubDomains(Pa.domain, Pa.template_labels)
+    template = MultipleROI(Pa.domain, Pa.template_labels)
     wim = template.to_image(prfx)
     hdr = wim.get_header()
     hdr['descrip'] = 'parcel-based random effects image (in t-variate)'
@@ -310,7 +310,7 @@ def fixed_parcellation(mask_image, betas, nbparcel, nn=6, method='ward',
         w, _ = g.ward(nbparcel)
         _, u, _ = g.geodesic_kmeans(label=w)
 
-    lpa = SubDomains(domain, u)
+    lpa = MultipleROI(domain, u)
 
     if verbose:
         var_beta = np.array(
