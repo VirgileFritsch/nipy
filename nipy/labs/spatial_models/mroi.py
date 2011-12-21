@@ -69,17 +69,18 @@ class MultipleROI(object):
 
         if label.size == 0:
             if isinstance(label, sps.coo.coo_matrix):
-                self.label = sps.coo_matrix(([], ([], [])), shape=label.shape)
+                self.voxels_to_rois_map = sps.coo_matrix(
+                    ([], ([], [])), shape=label.shape)
             else:
-                self.label = sps.coo_matrix(
+                self.voxels_to_rois_map = sps.coo_matrix(
                     ([], ([], [])), shape=(1, domain.size))
         elif label.ndim == 2 and label.shape[1] == domain.size:
             if label.shape[1] != domain.size:
                 raise ValueError("inconsistent dimensions of labels")
             if isinstance(label, sps.coo.coo_matrix):
-                self.label = label
+                self.voxels_to_rois_map = label
             else:
-                self.label = sps.coo_matrix(
+                self.voxels_to_rois_map = sps.coo_matrix(
                     (np.ones(np.sum(label > 0)), np.where(label > 0)),
                     shape=label.shape)
         else:
@@ -93,12 +94,12 @@ class MultipleROI(object):
                 label[label == k] = i
             # convert labels to a matrix
             if np.max(label) > -1:
-                self.label = sps.coo_matrix(
+                self.voxels_to_rois_map = sps.coo_matrix(
                     (np.ones(np.sum(label > -1)),
                      (label[label > -1], np.where(label > -1)[0])),
                     shape=(np.max(label) + 1, label.size))
             else:
-                self.label = sps.coo_matrix(
+                self.voxels_to_rois_map = sps.coo_matrix(
                     ([], ([], [])), shape=(1, label.size))
         self.domain = domain
         self.update_roi_number()
@@ -131,20 +132,21 @@ class MultipleROI(object):
         This method must be called everytime the MROI structure is modified.
 
         """
-        if self.label.size > 0:
-            valid_rows = np.where(self.label.tocsr().sum(1) > 0.)[0]
+        if self.voxels_to_rois_map.size > 0:
+            valid_rows = np.where(
+                self.voxels_to_rois_map.tocsr().sum(1) > 0.)[0]
             valid_mask = np.asarray(
-                [(i in valid_rows) for i in self.label.row])
+                [(i in valid_rows) for i in self.voxels_to_rois_map.row])
             new_data = np.ones(valid_mask.sum())
-            new_row = self.label.row[valid_mask]
+            new_row = self.voxels_to_rois_map.row[valid_mask]
             for i, k in enumerate(np.sort(np.unique(new_row))):
                 new_row[new_row == k] = i
-            new_col = self.label.col[valid_mask]
-            self.label = sps.coo_matrix(
+            new_col = self.voxels_to_rois_map.col[valid_mask]
+            self.voxels_to_rois_map = sps.coo_matrix(
                 (new_data, (new_row, new_col)),
-                shape=(valid_rows.size, self.label.shape[1]))
+                shape=(valid_rows.size, self.voxels_to_rois_map.shape[1]))
             # update number of ROIs
-            self.k = self.label.shape[0]
+            self.k = self.voxels_to_rois_map.shape[0]
         else:
             self.k = 0
 
@@ -167,14 +169,14 @@ class MultipleROI(object):
         roi: boolean
           If True (default), return the ROI index in the ROI list.
           If False, return the indices of the voxels of the ROI with the given
-          id. That way, internal access to self.label can be made.
+          id. That way, internal access to self.voxels_to_rois_map can be made.
 
         Return
         ------
         index: int or np.array of shape (roi.size, )
           Either the position of the ROI in the ROI list (if roi == True),
           or the positions of the voxels of the ROI with id `id`
-          with respect to the self.label array.
+          with respect to the self.voxels_to_rois_map array.
 
         """
         if id not in self.get_ids():
@@ -182,7 +184,8 @@ class MultipleROI(object):
         if roi:
             index = int(np.where(self.get_ids() == id)[0])
         else:
-            index = self.label.tocsr()[self.select_id(id)].nonzero()[1]
+            index = self.voxels_to_rois_map.tocsr()[
+                self.select_id(id)].nonzero()[1]
         return index
 
     ###
@@ -194,7 +197,8 @@ class MultipleROI(object):
         Note that self.domain is not copied.
 
         """
-        cp = MultipleROI(self.domain, self.label.copy(), id=self.get_ids())
+        cp = MultipleROI(
+            self.domain, self.voxels_to_rois_map.copy(), id=self.get_ids())
         for fid in self.features.keys():
             f = self.get_feature(fid)
             sf = [np.array(f[k]).copy() for k in range(self.k)]
@@ -483,7 +487,7 @@ class MultipleROI(object):
           and the feature.
 
         """
-        res = np.zeros(self.label.shape[1])
+        res = np.zeros(self.voxels_to_rois_map.shape[1])
         if not roi:
             f = self.get_feature(fid)
             for id in self.get_ids():
@@ -676,11 +680,11 @@ class MultipleROI(object):
         if fid is None:
             # write a binary representation of the domain if no fid provided
             nim = self.domain.to_image(
-                data=(self.label.tocsc().sum(0) > 0).astype(int))
+                data=(self.voxels_to_rois_map.tocsc().sum(0) > 0).astype(int))
             if descrip is None:
                 descrip = 'binary representation of MROI'
         else:
-            data = -np.ones(self.label.shape[1])
+            data = -np.ones(self.voxels_to_rois_map.shape[1])
             tmp_image = self.domain.to_image()
             mask = tmp_image.get_data().copy().astype(bool)
             if not roi:
@@ -728,14 +732,16 @@ class MultipleROI(object):
         """
         # handle the case of an empty selection
         if len(id_list) == 0:
-            self = MultipleROI(self.domain, -np.ones(self.label.shape[1]))
+            self = MultipleROI(
+                self.domain, -np.ones(self.voxels_to_rois_map.shape[1]))
             return
         # convert id to indices
         id_list_pos = np.ravel([self.select_id(k) for k in id_list])
         # set new labels (= map between voxels and ROI)
         for id in self.get_ids():
             if id not in id_list:
-                self.label.data[self.label.row == self.select_id(id)] = 0.
+                self.voxels_to_rois_map.data[
+                    self.voxels_to_rois_map.row == self.select_id(id)] = 0.
         self.update_roi_number()
         self.roi_features['id'] = np.ravel([id_list])
 
@@ -830,7 +836,7 @@ def mroi_from_position_and_image(nim, pos):
 
     """
     tmp = mroi_from_image(nim)
-    coord = np.array([tmp.domain.coord[tmp.label == k].mean(0)
+    coord = np.array([tmp.domain.coord[tmp.voxels_to_rois_map == k].mean(0)
                       for k in range(tmp.k)])
     idx = ((coord - pos) ** 2).sum(1).argmin()
     return mroi_from_array(nim.get_data() == idx, nim.get_affine())

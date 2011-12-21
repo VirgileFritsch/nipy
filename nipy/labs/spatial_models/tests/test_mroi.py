@@ -50,7 +50,8 @@ def test_mroi2():
     for k in mroi.get_ids():
         assert_equal(
             mroi.get_size(k),
-            np.size(mroi.label.tocsr()[mroi.select_id(k)].nonzero()[1]))
+            np.size(mroi.voxels_to_rois_map.tocsr()[
+                    mroi.select_id(k)].nonzero()[1]))
 
 
 def test_copy_mroi():

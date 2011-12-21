@@ -314,9 +314,11 @@ def fixed_parcellation(mask_image, betas, nbparcel, nn=6, method='ward',
 
     if verbose:
         var_beta = np.array(
-            [np.var(beta[lpa.label == k], 0).sum() for k in range(lpa.k)])
+            [np.var(beta[lpa.voxels_to_rois_map == k], 0).sum()
+             for k in range(lpa.k)])
         var_coord = np.array(
-            [np.var(coord[lpa.label == k], 0).sum() for k in range(lpa.k)])
+            [np.var(coord[lpa.voxels_to_rois_map == k], 0).sum()
+             for k in range(lpa.k)])
         size = lpa.get_size()
         vf = np.dot(var_beta, size) / size.sum()
         va = np.dot(var_coord, size) / size.sum()

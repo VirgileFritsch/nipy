@@ -296,7 +296,8 @@ class HierarchicalROI(MultipleROI):
             # handle the case of an empty selection
             new_parents = np.array([])
             self = HierarchicalROI(
-                self.domain, -np.ones(self.label.shape[1]), np.array([]))
+                self.domain, -np.ones(self.voxels_to_rois_map.shape[1]),
+                np.array([]))
         else:
             # get new parents
             new_parents = Forest(self.k, self.parents).subforest(
@@ -361,14 +362,16 @@ class HierarchicalROI(MultipleROI):
                 # compute new features
                 for fid in self.features.keys():
                     # preserve voxels order in the feature
-                    c_mask = np.zeros(self.label.shape[1], dtype=bool)
+                    c_mask = np.zeros(
+                        self.voxels_to_rois_map.shape[1], dtype=bool)
                     c_mask[self.select_id(c_id, roi=False)] = True
-                    p_mask = np.zeros(self.label.shape[1], dtype=bool)
+                    p_mask = np.zeros(
+                        self.voxels_to_rois_map.shape[1], dtype=bool)
                     p_mask[self.select_id(p_id, roi=False)] = True
                     # build new feature
                     c_feature = self.get_feature(fid, c_id)
                     p_feature = self.get_feature(fid, p_id)
-                    new_feature = np.zeros(self.label.shape[1])
+                    new_feature = np.zeros(self.voxels_to_rois_map.shape[1])
                     new_feature[c_mask] = c_feature
                     new_feature[p_mask] = p_feature
                     new_feature = new_feature[c_mask + p_mask]
@@ -394,20 +397,25 @@ class HierarchicalROI(MultipleROI):
                 self.parents[self.parents > former_pos] = \
                     self.parents[self.parents > former_pos] - 1
                 # merge labels
-                #self.label[p_pos, self.select_id(c_id, roi=False)] = 1.
-                #self.label[c_pos] = 0.
+                #self.voxels_to_rois_map[
+                #p_pos, self.select_id(c_id, roi=False)] = 1.
+                #self.voxels_to_rois_map[c_pos] = 0.
                 new_pos = self.select_id(c_id, roi=False)
-                c_ind = np.where(self.label.row == c_pos)[0]
+                c_ind = np.where(self.voxels_to_rois_map.row == c_pos)[0]
                 new_data = np.ones(
-                    self.label.data.size + new_pos.size - c_ind.size)
+                    self.voxels_to_rois_map.data.size + new_pos.size \
+                        - c_ind.size)
                 new_row = np.concatenate(
-                    (self.label.row[self.label.row != c_pos],
+                    (self.voxels_to_rois_map.row[
+                            self.voxels_to_rois_map.row != c_pos],
                      [p_pos] * new_pos.size))
                 new_col = np.concatenate(
-                    (self.label.col[self.label.row != c_pos],
+                    (self.voxels_to_rois_map.col[
+                            self.voxels_to_rois_map.row != c_pos],
                      new_pos))
-                self.label = sps.coo_matrix(
-                    (new_data, (new_row, new_col)), shape=self.label.shape)
+                self.voxels_to_rois_map = sps.coo_matrix(
+                    (new_data, (new_row, new_col)),
+                    shape=self.voxels_to_rois_map.shape)
                 # set ids
                 dj = self.get_roi_feature('id')
                 if 'id' in pull_features:
@@ -457,14 +465,16 @@ class HierarchicalROI(MultipleROI):
                 # compute new features
                 for fid in self.features.keys():
                     # preserve voxels order in the feature
-                    c_mask = np.zeros(self.label.shape[1], dtype=bool)
+                    c_mask = np.zeros(
+                        self.voxels_to_rois_map.shape[1], dtype=bool)
                     c_mask[self.select_id(c_id, roi=False)] = True
-                    p_mask = np.zeros(self.label.shape[1], dtype=bool)
+                    p_mask = np.zeros(
+                        self.voxels_to_rois_map.shape[1], dtype=bool)
                     p_mask[self.select_id(p_id, roi=False)] = True
                     # build new feature
                     c_feature = self.get_feature(fid, c_id)
                     p_feature = self.get_feature(fid, p_id)
-                    new_feature = np.zeros(self.label.shape[1])
+                    new_feature = np.zeros(self.voxels_to_rois_map.shape[1])
                     new_feature[c_mask] = c_feature
                     new_feature[p_mask] = p_feature
                     new_feature = new_feature[c_mask + p_mask]
@@ -492,20 +502,25 @@ class HierarchicalROI(MultipleROI):
                 self.parents[self.parents > former_pos] = \
                     self.parents[self.parents > former_pos] - 1
                 # merge labels
-                #self.label[c_pos, self.select_id(p_id, roi=False)] = 1.
-                #self.label[p_pos] = 0.
+                #self.voxels_to_rois_map[
+                #c_pos, self.select_id(p_id, roi=False)] = 1.
+                #self.voxels_to_rois_map[p_pos] = 0.
                 new_pos = self.select_id(p_id, roi=False)
-                p_ind = np.where(self.label.row == p_pos)[0]
+                p_ind = np.where(self.voxels_to_rois_map.row == p_pos)[0]
                 new_data = np.ones(
-                    self.label.data.size + new_pos.size - p_ind.size)
+                    self.voxels_to_rois_map.data.size + new_pos.size \
+                        - p_ind.size)
                 new_row = np.concatenate(
-                    (self.label.row[self.label.row != p_pos],
+                    (self.voxels_to_rois_map.row[
+                            self.voxels_to_rois_map.row != p_pos],
                      [c_pos] * new_pos.size))
                 new_col = np.concatenate(
-                    (self.label.col[self.label.row != p_pos],
+                    (self.voxels_to_rois_map.col[
+                            self.voxels_to_rois_map.row != p_pos],
                      new_pos))
-                self.label = sps.coo_matrix(
-                    (new_data, (new_row, new_col)), shape=self.label.shape)
+                self.voxels_to_rois_map = sps.coo_matrix(
+                    (new_data, (new_row, new_col)),
+                    shape=self.voxels_to_rois_map.shape)
                 # set ids
                 dj = self.get_roi_feature('id')
                 if 'id' in pull_features:
@@ -566,7 +581,7 @@ class HierarchicalROI(MultipleROI):
 
         """
         cp = HierarchicalROI(
-            self.domain, self.label.copy(),
+            self.domain, self.voxels_to_rois_map.copy(),
             self.parents.copy(), self.get_ids())
         # copy features
         for fid in self.features.keys():
@@ -657,7 +672,7 @@ def make_hroi_from_mroi(mroi, parents):
     """Instantiate an HROi from a MultipleROI instance and parents
 
     """
-    hroi = HierarchicalROI(mroi.domain, mroi.label, parents)
+    hroi = HierarchicalROI(mroi.domain, mroi.voxels_to_rois_map, parents)
     # set features
     for fid in mroi.features.keys():
         hroi.set_feature(fid, mroi.get_feature(fid))
